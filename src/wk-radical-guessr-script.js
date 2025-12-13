@@ -19,13 +19,33 @@
 
   const RADICAL_SECTION_TITLE_KEY = "Radical Composition";
 
-  const state = {
+  const STATE_DEFAULT = {
     pageUrl: null,
     lesson: {
       radicalsSection: null,
       radicals: [],
+      initialisedInput: false,
+      initialisedCovers: false,
     },
   };
+
+  let state = {};
+
+  class State {
+    constructor(lesson) {
+      this.pageUrl = null;
+      this.lesson = lesson;
+    }
+  }
+
+  class Lesson {
+    constructor() {
+      this.radicalsSection = null;
+      this.radicals = [];
+      this.initialisedInput = false;
+      this.initialisedCovers = false;
+    }
+  }
 
   class Radical {
     constructor(title, coverElement) {
@@ -43,8 +63,12 @@
 
   window.addEventListener("turbo:load", onTurboLoad);
 
-  function onTurboLoad() {
-    state.pageUrl = window.location.pathname;
+  function onTurboLoad(event) {
+    state = new State(new Lesson());
+
+    state.pageUrl = event.detail.url;
+
+    console.log("[WK] state", state);
 
     const runApp = () => {
       router();
@@ -109,9 +133,11 @@
     },
 
     initInput() {
-      const subjectSection = state.lesson.radicalsSection;
+      console.log("[WK] initInput");
+      if (state.lesson.initialisedInput) return;
+      state.lesson.initialisedInput = true;
 
-      if (subjectSection.querySelector("radical__input-container")) return;
+      const subjectSection = state.lesson.radicalsSection;
 
       const container = document.createElement("div");
       container.className = "radical__input-container";
@@ -157,6 +183,9 @@
     },
 
     initRadicalCovers() {
+      if (state.lesson.initialisedCovers) return;
+      state.lesson.initialisedCovers = true;
+
       const subjectSection = state.lesson.radicalsSection;
 
       if (subjectSection.querySelector("subject-character__cover")) return;
