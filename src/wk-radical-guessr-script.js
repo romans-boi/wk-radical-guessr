@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WaniKani RadicalGuessr
 // @namespace    http://tampermonkey.net/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Enhance your kanji lessons by attempting to guess which radicals make up a kanji.
 // @author       romans-boi
 // @license      MIT
@@ -34,6 +34,7 @@
       this.radicals = [];
       this.initialisedInput = false;
       this.initialisedCovers = false;
+      this.initialisedSubmitAll = false;
       this.incorrectAnimationInProgress = false;
     }
   }
@@ -213,6 +214,10 @@
     },
 
     initSubmitAllButton() {
+      // Want to avoid inserting the button more than once
+      if (state.lesson.initialisedSubmitAll) return;
+      state.lesson.initialisedSubmitAll = true;
+
       const subjectSection = state.lesson.radicalsSection;
 
       const container = document.createElement("div");
