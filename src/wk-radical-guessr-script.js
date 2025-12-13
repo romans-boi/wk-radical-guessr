@@ -6,7 +6,7 @@
 // @author       romans-boi
 // @license      MIT
 // @match        https://www.wanikani.com/*
-// @run-at       document-end
+// @run-at       document-start
 // @grant        none
 // ==/UserScript==
 
@@ -19,21 +19,11 @@
 
   const RADICAL_SECTION_TITLE_KEY = "Radical Composition";
 
-  const STATE_DEFAULT = {
-    pageUrl: null,
-    lesson: {
-      radicalsSection: null,
-      radicals: [],
-      initialisedInput: false,
-      initialisedCovers: false,
-    },
-  };
-
   let state = {};
 
   class State {
-    constructor(lesson) {
-      this.pageUrl = null;
+    constructor(pageUrl, lesson) {
+      this.pageUrl = pageUrl;
       this.lesson = lesson;
     }
   }
@@ -44,6 +34,7 @@
       this.radicals = [];
       this.initialisedInput = false;
       this.initialisedCovers = false;
+      this.incorrectAnimationInProgress = false;
     }
   }
 
@@ -64,11 +55,7 @@
   window.addEventListener("turbo:load", onTurboLoad);
 
   function onTurboLoad(event) {
-    state = new State(new Lesson());
-
-    state.pageUrl = event.detail.url;
-
-    console.log("[WK] state", state);
+    state = new State(event.detail.url, new Lesson());
 
     const runApp = () => {
       router();
@@ -84,7 +71,6 @@
   // ==========================================================================================
 
   function router() {
-    console.log("router");
     const { pageUrl } = state;
 
     console.log(pageUrl);
@@ -104,14 +90,12 @@
 
   const LessonPage = {
     async init() {
-      console.log("LessonPage.init");
       addStyle();
 
       const element = await waitForElement(".subject-section", 10);
-      console.log("[WK] Element", element);
 
+      // Only care if we are on a radical lesson
       if (element.title == RADICAL_SECTION_TITLE_KEY) {
-        console.log("[WK] Matched title");
         state.lesson.radicalsSection = element;
         RadicalQuiz.init();
       }
@@ -126,14 +110,14 @@
 
   const RadicalQuiz = {
     async init() {
-      console.log("[WK] RadicalQUiz.init");
-
       this.initInput();
       this.initRadicalCovers();
+      this.initSubmitAllButton();
+      this.replaceDescriptionText();
     },
 
     initInput() {
-      console.log("[WK] initInput");
+      // Want to avoid inserting the input more than once
       if (state.lesson.initialisedInput) return;
       state.lesson.initialisedInput = true;
 
@@ -147,35 +131,34 @@
       input.placeholder = "Type radical...";
       input.className = "radical__input";
 
-      const buttonInnerHtml = `
+      const resetInput = () => {
+        input.value = "";
+      };
+
+      const button = document.createElement("button");
+      button.className = "radical__input-submit-button";
+      button.innerHTML = `
         <svg class="wk-icon wk-icon--chevron_right" viewBox="0 0 320 512" aria-hidden="true">
             <use href="#wk-icon__chevron-right"></use>
         </svg>
       `;
 
-      const btn = document.createElement("button");
-      btn.className = "radical__input-submit-button";
-      btn.innerHTML = buttonInnerHtml;
-
-      // Handle button click
-      btn.addEventListener("click", () => {
-        // Handle submit
-        console.log("Submitted - button pressed");
-        this.handleSubmit(input);
+      // Handle normal click
+      button.addEventListener("click", () => {
+        this.handleSubmit(input.value, resetInput);
       });
 
       // Handle Enter key
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
-          // handle submit
-          console.log("Submitted - enter pressed");
-          this.handleSubmit(input);
+          this.handleSubmit(input.value, resetInput);
         }
       });
 
       container.appendChild(input);
-      container.appendChild(btn);
+      container.appendChild(button);
 
+      // Insert right before the list of radicals
       const parent = subjectSection.querySelector(".subject-section__content");
       const subjectListDiv = subjectSection.querySelector(".subject-list");
 
@@ -183,95 +166,158 @@
     },
 
     initRadicalCovers() {
+      // Want to avoid inserting the covers more than once
       if (state.lesson.initialisedCovers) return;
       state.lesson.initialisedCovers = true;
 
       const subjectSection = state.lesson.radicalsSection;
 
-      if (subjectSection.querySelector("subject-character__cover")) return;
-
       const subjectItems = subjectSection.querySelector(
         ".subject-list__items"
       ).children;
 
-      console.log("[WK] subjectItems", subjectItems);
-
       for (let index = 0; index < subjectItems.length; index++) {
-        const title = subjectItems[index].querySelector(
-          ".subject-character__meaning"
-        ).textContent;
-
-        const itemContentDiv = subjectItems[index].querySelector(
+        // Insert the cover with absolute position into
+        // the character container
+        const parent = subjectItems[index].querySelector(
           ".subject-character__content"
         );
-
-        console.log("[WK] itemContentDiv", itemContentDiv);
 
         const coverDiv = document.createElement("div");
         coverDiv.className = "subject-character__cover";
 
-        const rect = itemContentDiv.getBoundingClientRect();
+        const rect = parent.getBoundingClientRect();
         coverDiv.style.width = rect.width + "px";
         coverDiv.style.height = rect.height + "px";
 
+        const title = subjectItems[index].querySelector(
+          ".subject-character__meaning"
+        ).textContent;
+
         const radical = new Radical(title, coverDiv);
 
+        // Update state
+        state.lesson.radicals.push(radical);
+
         coverDiv.addEventListener("click", (e) => {
+          // Prevent navigation to the radical page
+          // when clicking on the cover
           e.stopPropagation();
           e.preventDefault();
+
           this.revealRadical(radical);
         });
 
-        itemContentDiv.appendChild(coverDiv);
-
-        state.lesson.radicals.push(radical);
+        parent.appendChild(coverDiv);
       }
     },
 
-    handleSubmit(input) {
-      const inputText = input.value;
+    initSubmitAllButton() {
+      const subjectSection = state.lesson.radicalsSection;
+
+      const container = document.createElement("div");
+      container.className = "submit-all__container";
+
+      const button = document.createElement("button");
+      button.className = "wk-button wk-button--primary";
+      button.innerHTML = `
+        <span class="wk-button__shadow"></span>
+        <span class="wk-button__edge"></span>
+        <span class="wk-button__content">
+            <span class="wk-button__text">Reveal All</span>
+        </span>
+      `;
+
+      button.addEventListener("click", () => {
+        this.revealAll();
+      });
+
+      container.appendChild(button);
+      subjectSection.appendChild(container);
+    },
+
+    replaceDescriptionText() {
+      const description = document.querySelector(".subject-section__content")
+        .children[0];
+      console.log(description);
+      description.textContent = description.textContent.replace(
+        "Can you see where the radicals fit in the kanji?",
+        "Can you guess which radicals make up this kanji?"
+      );
+    },
+
+    handleSubmit(inputText, resetInput) {
+      const radicals = state.lesson.radicals;
+
+      // Skip handling submit if every radical is already uncovered
+      if (radicals.every((radical) => !radical.isCovered)) return;
 
       const normalizeText = (text) => {
         return text.trim().toLowerCase();
       };
 
-      const radicals = state.lesson.radicals;
-
       const matchingRadicalIndex = radicals.findIndex(
         (radical) =>
+          // Checking isCovered accounts for mutliple radicals with same name (still
+          // reveals one at a time)
           radical.isCovered &&
           normalizeText(radical.title) == normalizeText(inputText)
       );
 
       if (matchingRadicalIndex !== -1) {
-        input.value = "";
+        // Reset the input only if correct, and reveal radical
+        resetInput();
         this.revealRadical(radicals[matchingRadicalIndex]);
       } else {
-        console.log("incorrect!");
-        for (let index = 0; index < radicals.length; index++) {
-          const radical = radicals[index];
-          if ([...radical.coverElement.classList].includes("incorrect")) break;
+        this.showIncorrectAnimation();
+      }
+    },
 
-          radical.coverElement.classList.add("incorrect");
+    showIncorrectAnimation() {
+      const { radicals, incorrectAnimationInProgress } = state.lesson;
 
-          setTimeout(() => {
-            radical.coverElement.classList.remove("incorrect");
-          }, 1000);
-        }
+      if (incorrectAnimationInProgress) return;
+
+      state.lesson.incorrectAnimationInProgress = true;
+
+      const addAnimation = (radical) => {
+        radical.coverElement.classList.add("incorrect");
+      };
+
+      const removeAnimation = (radical) => {
+        radical.coverElement.classList.remove("incorrect");
+        state.lesson.incorrectAnimationInProgress = false;
+      };
+
+      for (let index = 0; index < radicals.length; index++) {
+        const radical = radicals[index];
+
+        addAnimation(radical);
+
+        setTimeout(() => {
+          removeAnimation(radical);
+        }, 1010);
       }
     },
 
     revealRadical(radical) {
+      // No point revealing radical if already uncovered
+      if (!radical.isCovered) return;
+
       radical.coverElement.classList.add("correct");
 
-      //   setTimeout(() => {
-      //     radical.coverElement.classList.add("fade-out");
-      //   }, 500);
+      setTimeout(() => {
+        radical.coverElement.remove();
+        radical.isCovered = false;
+      }, 1010);
+    },
 
-      //   setTimeout(() => {
-      //     radical.coverElement.remove();
-      //     radical.isCovered = false;
-      //   }, 1000);
+    revealAll() {
+      const radicals = state.lesson.radicals;
+
+      for (let index = 0; index < radicals.length; index++) {
+        this.revealRadical(radicals[index]);
+      }
     },
   };
 
@@ -328,11 +374,6 @@
             animation-duration: 1s;
         }        
 
-        .subject-character__cover.fade-out {
-            opacity: 0;
-            transition:all .5s ease-in;
-        }
-
         .radical__input-container {
             margin-bottom: var(--spacing-normal);
             position:relative;
@@ -366,6 +407,10 @@
             padding: 0 12px;
             font-size: 16px;
             color: inherit;
+        }
+
+        .submit-all__container {
+            display: inline-block;
         }
     `;
     const styleEl = document.createElement("style");
