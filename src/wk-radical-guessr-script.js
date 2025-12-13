@@ -2,7 +2,7 @@
 // @name         WaniKani RadicalGuessr
 // @namespace    http://tampermonkey.net/
 // @version      1.0.0
-// @description  Allows you to guess the radicals for a kanji in lessons.
+// @description  Enhance your kanji lessons by attempting to guess which radicals make up a kanji.
 // @author       romans-boi
 // @license      MIT
 // @match        https://www.wanikani.com/*
