@@ -6,7 +6,7 @@
 // @author       romans-boi
 // @license      MIT
 // @match        https://www.wanikani.com/*
-// @run-at       document-start
+// @run-at       document-end
 // @grant        none
 // ==/UserScript==
 
