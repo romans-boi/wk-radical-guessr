@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WaniKani RadicalGuessr
 // @namespace    http://tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Enhance your kanji lessons by attempting to guess which radicals make up a kanji.
 // @author       romans-boi
 // @license      MIT
@@ -179,10 +179,8 @@
 
       for (let index = 0; index < subjectItems.length; index++) {
         // Insert the cover with absolute position into
-        // the character container
-        const parent = subjectItems[index].querySelector(
-          ".subject-character__content"
-        );
+        // the <li> so that it masks the link set on the child <a>
+        const parent = subjectItems[index];
 
         const coverDiv = document.createElement("div");
         coverDiv.className = "subject-character__cover";
@@ -190,6 +188,7 @@
         const rect = parent.getBoundingClientRect();
         coverDiv.style.width = rect.width + "px";
         coverDiv.style.height = rect.height + "px";
+        coverDiv.title = "Tap to reveal";
 
         const title = subjectItems[index].querySelector(
           ".subject-character__meaning"
